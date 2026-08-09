@@ -7,6 +7,7 @@ import typer
 from gpunodediag import __version__
 from gpunodediag.checks.engine import run_diagnostics
 from gpunodediag.commands.watch import watch_command
+from gpunodediag.commands.report import report_command
 from gpunodediag.collectors.dcgm import (
     collect_dcgm_status,
     run_dcgm_diagnostics,
@@ -43,6 +44,7 @@ app = typer.Typer(
 
 
 app.command("watch")(watch_command)
+app.command("report")(report_command)
 
 
 @app.callback(invoke_without_command=True)
