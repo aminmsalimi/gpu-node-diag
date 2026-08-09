@@ -20,6 +20,16 @@ Then run:
 gdiag
 ```
 
+### ⚡ Real Hardware Demo
+
+![Ubuntu](https://img.shields.io/badge/Ubuntu-26.04-E95420?logo=ubuntu&logoColor=white)
+![NVIDIA](https://img.shields.io/badge/NVIDIA-H100-76B900?logo=nvidia&logoColor=white)
+![Bare Metal](https://img.shields.io/badge/Deployment-Bare_Metal-555555?logo=linux&logoColor=white)
+
+**Demo environment:** Ubuntu 26.04 running bare-metal on an NVIDIA H100 GPU server.
+
+![GPUNodeDiag Demo](assets/demo.gif)
+
 ## 🔍 What it checks
 
 - GPU discovery, utilization, memory, temperature and power
