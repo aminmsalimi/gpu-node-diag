@@ -1,15 +1,17 @@
-import json
+﻿import json
 from dataclasses import asdict
 from typing import Optional
 
 import typer
 
 from gpunodediag import __version__
+from gpunodediag.checks.engine import run_diagnostics
 from gpunodediag.collectors.nvidia_smi import collect_gpus
 from gpunodediag.collectors.system import collect_host_info
 from gpunodediag.output.terminal import (
     console,
     print_banner,
+    print_findings,
     print_gpu_error,
     print_gpus,
     print_host,
@@ -62,12 +64,21 @@ def run(
         if not gpus and error is None:
             error = f"GPU index {gpu} was not found"
 
+    findings = run_diagnostics(gpus) if gpus else []
+
     if json_output:
         payload = {
             "tool": "GPUNodeDiag",
             "version": __version__,
             "host": asdict(host),
             "gpus": [asdict(item) for item in gpus],
+            "findings": [
+                {
+                    **asdict(item),
+                    "severity": item.severity.name,
+                }
+                for item in findings
+            ],
             "error": error,
         }
 
@@ -79,8 +90,10 @@ def run(
 
     if error:
         print_gpu_error(error)
-    else:
-        print_gpus(gpus)
+        return
+
+    print_gpus(gpus)
+    print_findings(findings)
 
 
 def main() -> None:

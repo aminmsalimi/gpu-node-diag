@@ -1,4 +1,4 @@
-import shutil
+﻿import shutil
 import subprocess
 from typing import Optional
 
@@ -17,7 +17,9 @@ QUERY_FIELDS = [
     "memory.used",
     "memory.total",
     "pcie.link.gen.current",
+    "pcie.link.gen.max",
     "pcie.link.width.current",
+    "pcie.link.width.max",
     "persistence_mode",
     "mig.mode.current",
 ]
@@ -26,7 +28,13 @@ QUERY_FIELDS = [
 def _to_float(value: str) -> Optional[float]:
     value = value.strip()
 
-    if value.lower() in {"n/a", "na", "not supported", "[not supported]", ""}:
+    if value.lower() in {
+        "n/a",
+        "na",
+        "not supported",
+        "[not supported]",
+        "",
+    }:
         return None
 
     try:
@@ -38,7 +46,13 @@ def _to_float(value: str) -> Optional[float]:
 def _clean(value: str) -> Optional[str]:
     value = value.strip()
 
-    if value.lower() in {"n/a", "na", "not supported", "[not supported]", ""}:
+    if value.lower() in {
+        "n/a",
+        "na",
+        "not supported",
+        "[not supported]",
+        "",
+    }:
         return None
 
     return value
@@ -104,9 +118,11 @@ def collect_gpus() -> tuple[list[GPUInfo], Optional[str]]:
                 memory_used_mb=_to_float(values[8]),
                 memory_total_mb=_to_float(values[9]),
                 pcie_generation=_clean(values[10]),
-                pcie_width=_clean(values[11]),
-                persistence_mode=_clean(values[12]),
-                mig_mode=_clean(values[13]),
+                pcie_generation_max=_clean(values[11]),
+                pcie_width=_clean(values[12]),
+                pcie_width_max=_clean(values[13]),
+                persistence_mode=_clean(values[14]),
+                mig_mode=_clean(values[15]),
             )
         )
 
