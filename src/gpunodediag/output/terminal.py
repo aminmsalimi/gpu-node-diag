@@ -1,13 +1,21 @@
-from rich import box
+﻿from rich import box
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from gpunodediag.models import GPUInfo, HostInfo
+from gpunodediag.models import Finding, GPUInfo, HostInfo, Severity
 
 
 console = Console()
+
+
+SEVERITY_STYLE = {
+    Severity.INFO: "cyan",
+    Severity.WARNING: "yellow",
+    Severity.HIGH: "bold yellow",
+    Severity.CRITICAL: "bold red",
+}
 
 
 def _value(value, suffix: str = "") -> str:
@@ -100,7 +108,7 @@ def print_gpus(gpus: list[GPUInfo]) -> None:
         table.add_row(
             str(gpu.index),
             gpu.name,
-            _value(gpu.temperature_c, "°C"),
+            _value(gpu.temperature_c, " C"),
             power,
             _value(gpu.utilization_percent, "%"),
             memory,
@@ -110,18 +118,69 @@ def print_gpus(gpus: list[GPUInfo]) -> None:
 
     console.print(table)
 
-    driver_versions = sorted({gpu.driver_version for gpu in gpus})
 
-    summary = (
-        f"[green]PASS[/green]  Detected [bold]{len(gpus)}[/bold] NVIDIA GPU"
-        f"{'s' if len(gpus) != 1 else ''}\n"
-        f"Driver: [bold]{', '.join(driver_versions)}[/bold]"
+def print_findings(findings: list[Finding]) -> None:
+    if not findings:
+        console.print(
+            Panel(
+                "[green]PASS[/green]  No diagnostic issues detected.",
+                title="Diagnostics",
+                border_style="green",
+            )
+        )
+        return
+
+    table = Table(
+        title="Diagnostic Findings",
+        box=box.ROUNDED,
     )
+
+    table.add_column("Severity")
+    table.add_column("GPU", justify="center")
+    table.add_column("Finding")
+    table.add_column("Details")
+
+    for finding in findings:
+        style = SEVERITY_STYLE[finding.severity]
+
+        table.add_row(
+            f"[{style}]{finding.severity.name}[/{style}]",
+            (
+                str(finding.gpu_index)
+                if finding.gpu_index is not None
+                else "-"
+            ),
+            finding.title,
+            finding.message,
+        )
+
+    console.print(table)
+
+    critical = sum(
+        1 for item in findings if item.severity is Severity.CRITICAL
+    )
+    high = sum(
+        1 for item in findings if item.severity is Severity.HIGH
+    )
+    warning = sum(
+        1 for item in findings if item.severity is Severity.WARNING
+    )
+
+    if critical:
+        status = "[bold red]CRITICAL[/bold red]"
+        border = "red"
+    elif high:
+        status = "[bold yellow]DEGRADED[/bold yellow]"
+        border = "yellow"
+    else:
+        status = "[yellow]WARNING[/yellow]"
+        border = "yellow"
 
     console.print(
         Panel(
-            summary,
-            title="Initial Status",
-            border_style="green",
+            f"Overall status: {status}\n\n"
+            f"Critical: {critical}   High: {high}   Warnings: {warning}",
+            title="Node Health",
+            border_style=border,
         )
     )
