@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=77", "wheel"]
+requires = ["setuptools>=77.0.3", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,21 +8,51 @@ version = "0.1.0"
 description = "NVIDIA GPU node diagnostics and troubleshooting CLI"
 readme = "README.md"
 requires-python = ">=3.10"
+license = "Apache-2.0"
+
 authors = [
     { name = "Mohammad Amin Salimi" }
 ]
+
+keywords = [
+    "nvidia",
+    "gpu",
+    "cuda",
+    "dcgm",
+    "nvlink",
+    "kubernetes",
+    "diagnostics",
+    "infrastructure"
+]
+
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: System Administrators",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: System :: Systems Administration"
+]
+
 dependencies = [
     "typer>=0.15",
     "rich>=13",
     "nvidia-ml-py>=12"
 ]
 
+[project.urls]
+Homepage = "https://github.com/aminmsalimi/gpu-node-diag"
+Repository = "https://github.com/aminmsalimi/gpu-node-diag"
+Issues = "https://github.com/aminmsalimi/gpu-node-diag/issues"
+
 [project.scripts]
 gdiag = "gpunodediag.cli:main"
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8"
+    "pytest>=8",
+    "build>=1.2"
 ]
 
 [tool.setuptools.packages.find]
