@@ -96,11 +96,41 @@ else {
 }
 
 Write-Host ""
-Write-Host "Waiting for GitHub Actions..." -ForegroundColor Cyan
+Write-Host "Waiting for GitHub Actions to appear..." -ForegroundColor Cyan
+
+$checksFound = $false
+
+for ($i = 1; $i -le 24; $i++) {
+
+    $checkOutput = gh pr checks 2>&1
+    $checkText = ($checkOutput | Out-String)
+
+    if (
+        $checkText -notmatch "no checks reported" -and
+        $checkText -notmatch "no checks"
+    ) {
+        $checksFound = $true
+        break
+    }
+
+    Write-Host "CI not registered yet... waiting 5 seconds ($i/24)"
+    Start-Sleep -Seconds 5
+}
+
+if (-not $checksFound) {
+    Write-Host ""
+    Write-Host "No GitHub Actions checks appeared after 2 minutes." -ForegroundColor Red
+    Write-Host "PR was left open and was NOT merged."
+    exit 1
+}
+
+Write-Host ""
+Write-Host "CI detected. Waiting for completion..." -ForegroundColor Cyan
 
 gh pr checks --watch --fail-fast
 
 if ($LASTEXITCODE -ne 0) {
+    Write-Host ""
     Write-Host "CI failed. PR will NOT be merged." -ForegroundColor Red
     exit 1
 }
@@ -120,5 +150,12 @@ git checkout main
 git pull --ff-only origin main
 
 Write-Host ""
+Write-Host "========================================" -ForegroundColor Green
 Write-Host "DONE" -ForegroundColor Green
-Write-Host "PR merged and local main updated."
+Write-Host "Tests passed"
+Write-Host "PR created"
+Write-Host "CI passed"
+Write-Host "PR merged"
+Write-Host "Remote feature branch deleted"
+Write-Host "Local main updated"
+Write-Host "========================================" -ForegroundColor Green
