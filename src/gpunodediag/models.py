@@ -166,3 +166,35 @@ class KubernetesStatus:
     device_plugin_pods: list[KubernetesPodStatus] = field(default_factory=list)
     error: Optional[str] = None
     notes: list[str] = field(default_factory=list)
+
+@dataclass
+class DriverStackStatus:
+    platform: str
+
+    nvidia_smi_path: Optional[str] = None
+    nvidia_smi_ok: Optional[bool] = None
+
+    driver_version: Optional[str] = None
+    driver_cuda_max: Optional[str] = None
+
+    kernel_module_loaded: Optional[bool] = None
+    kernel_module_version: Optional[str] = None
+    kernel_module_flavor: Optional[str] = None
+
+    nvidia_uvm_loaded: Optional[bool] = None
+    nvidia_drm_loaded: Optional[bool] = None
+    nvidia_modeset_loaded: Optional[bool] = None
+    nvidia_peermem_loaded: Optional[bool] = None
+
+    secure_boot_enabled: Optional[bool] = None
+
+    nvcc_path: Optional[str] = None
+    cuda_toolkit_version: Optional[str] = None
+    cuda_home: Optional[str] = None
+    toolkit_paths: list[str] = field(default_factory=list)
+
+    cuda_driver_library: Optional[str] = None
+    cuda_runtime_library: Optional[str] = None
+
+    error: Optional[str] = None
+    notes: list[str] = field(default_factory=list)
