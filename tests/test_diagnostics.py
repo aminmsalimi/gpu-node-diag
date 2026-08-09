@@ -78,3 +78,55 @@ def test_temperature_outlier_is_detected():
         and finding.gpu_index == 2
         for finding in findings
     )
+
+
+def test_power_cap_is_detected():
+    findings = run_diagnostics(
+        [
+            make_gpu(
+                clock_event_mask=4,
+                clock_event_sw_power_cap=True,
+            )
+        ]
+    )
+
+    assert any(
+        finding.code == "GPU_POWER_CAP_ACTIVE"
+        and finding.severity is Severity.WARNING
+        for finding in findings
+    )
+
+
+def test_hardware_slowdown_is_detected():
+    findings = run_diagnostics(
+        [
+            make_gpu(
+                clock_event_mask=8,
+                clock_event_hw_slowdown=True,
+            )
+        ]
+    )
+
+    assert any(
+        finding.code == "GPU_HW_SLOWDOWN_ACTIVE"
+        and finding.severity is Severity.HIGH
+        for finding in findings
+    )
+
+
+def test_thermal_slowdown_is_detected():
+    findings = run_diagnostics(
+        [
+            make_gpu(
+                temperature_c=88,
+                clock_event_mask=32,
+                clock_event_sw_thermal_slowdown=True,
+            )
+        ]
+    )
+
+    assert any(
+        finding.code == "GPU_SW_THERMAL_SLOWDOWN_ACTIVE"
+        and finding.severity is Severity.HIGH
+        for finding in findings
+    )

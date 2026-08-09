@@ -1,4 +1,4 @@
-﻿import shutil
+import shutil
 import subprocess
 from typing import Optional
 
@@ -10,6 +10,7 @@ QUERY_FIELDS = [
     "name",
     "uuid",
     "driver_version",
+    "pci.bus_id",
     "temperature.gpu",
     "power.draw",
     "power.limit",
@@ -111,18 +112,19 @@ def collect_gpus() -> tuple[list[GPUInfo], Optional[str]]:
                 name=values[1],
                 uuid=values[2],
                 driver_version=values[3],
-                temperature_c=_to_float(values[4]),
-                power_draw_w=_to_float(values[5]),
-                power_limit_w=_to_float(values[6]),
-                utilization_percent=_to_float(values[7]),
-                memory_used_mb=_to_float(values[8]),
-                memory_total_mb=_to_float(values[9]),
-                pcie_generation=_clean(values[10]),
-                pcie_generation_max=_clean(values[11]),
-                pcie_width=_clean(values[12]),
-                pcie_width_max=_clean(values[13]),
-                persistence_mode=_clean(values[14]),
-                mig_mode=_clean(values[15]),
+                pci_bus_id=_clean(values[4]),
+                temperature_c=_to_float(values[5]),
+                power_draw_w=_to_float(values[6]),
+                power_limit_w=_to_float(values[7]),
+                utilization_percent=_to_float(values[8]),
+                memory_used_mb=_to_float(values[9]),
+                memory_total_mb=_to_float(values[10]),
+                pcie_generation=_clean(values[11]),
+                pcie_generation_max=_clean(values[12]),
+                pcie_width=_clean(values[13]),
+                pcie_width_max=_clean(values[14]),
+                persistence_mode=_clean(values[15]),
+                mig_mode=_clean(values[16]),
             )
         )
 

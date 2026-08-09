@@ -13,11 +13,17 @@ authors = [
 ]
 dependencies = [
     "typer>=0.15",
-    "rich>=13"
+    "rich>=13",
+    "nvidia-ml-py>=12"
 ]
 
 [project.scripts]
 gdiag = "gpunodediag.cli:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8"
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -25,7 +31,3 @@ where = ["src"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
-[project.optional-dependencies]
-dev = [
-    "pytest>=8"
-]

@@ -1,4 +1,4 @@
-﻿import json
+import json
 from dataclasses import asdict
 from typing import Optional
 
@@ -6,8 +6,11 @@ import typer
 
 from gpunodediag import __version__
 from gpunodediag.checks.engine import run_diagnostics
+from gpunodediag.collectors.kernel_logs import collect_kernel_logs
 from gpunodediag.collectors.nvidia_smi import collect_gpus
+from gpunodediag.collectors.nvml import enrich_nvml_state
 from gpunodediag.collectors.system import collect_host_info
+from gpunodediag.collectors.xid import parse_xid_events
 from gpunodediag.output.terminal import (
     console,
     print_banner,
@@ -64,7 +67,34 @@ def run(
         if not gpus and error is None:
             error = f"GPU index {gpu} was not found"
 
-    findings = run_diagnostics(gpus) if gpus else []
+    notes: list[str] = []
+    xid_events = []
+
+    if gpus:
+        nvml_note = enrich_nvml_state(gpus)
+
+        if nvml_note:
+            notes.append(nvml_note)
+
+        kernel_text, kernel_note = collect_kernel_logs()
+
+        if kernel_note:
+            notes.append(kernel_note)
+
+        if kernel_text:
+            xid_events = parse_xid_events(
+                kernel_text,
+                gpus,
+            )
+
+    findings = (
+        run_diagnostics(
+            gpus,
+            xid_events=xid_events,
+        )
+        if gpus
+        else []
+    )
 
     if json_output:
         payload = {
@@ -72,6 +102,10 @@ def run(
             "version": __version__,
             "host": asdict(host),
             "gpus": [asdict(item) for item in gpus],
+            "xid_events": [
+                asdict(item)
+                for item in xid_events
+            ],
             "findings": [
                 {
                     **asdict(item),
@@ -79,6 +113,7 @@ def run(
                 }
                 for item in findings
             ],
+            "notes": notes,
             "error": error,
         }
 
@@ -94,6 +129,12 @@ def run(
 
     print_gpus(gpus)
     print_findings(findings)
+
+    if notes:
+        for note in notes:
+            console.print(
+                f"[dim]Capability note: {note}[/dim]"
+            )
 
 
 def main() -> None:
