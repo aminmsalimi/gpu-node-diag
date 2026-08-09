@@ -1,4 +1,4 @@
-﻿from rich import box
+from rich import box
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -184,3 +184,110 @@ def print_findings(findings: list[Finding]) -> None:
             border_style=border,
         )
     )
+
+
+def print_fabric(
+    gpus,
+    fabric_manager,
+    p2p_matrix,
+) -> None:
+    from rich import box
+    from rich.panel import Panel
+    from rich.table import Table
+
+    any_nvlink = any(
+        gpu.nvlink_supported is True
+        for gpu in gpus
+    )
+
+    any_fabric = any(
+        gpu.fabric_state
+        for gpu in gpus
+    )
+
+    if not any_nvlink and not any_fabric:
+        console.print(
+            Panel(
+                "[dim]No supported NVLink fabric detected.[/dim]",
+                title="GPU Fabric",
+                border_style="dim",
+            )
+        )
+        return
+
+    table = Table(
+        title="NVLink / GPU Fabric",
+        box=box.ROUNDED,
+        header_style="bold cyan",
+    )
+
+    table.add_column("GPU", justify="right")
+    table.add_column("NVLink")
+    table.add_column("Errors", justify="right")
+    table.add_column("Fabric State")
+    table.add_column("Fabric Status")
+
+    for gpu in gpus:
+        if gpu.nvlink_supported is True:
+            links = (
+                f"{gpu.nvlink_active_links}/"
+                f"{gpu.nvlink_total_links} active"
+            )
+        elif gpu.nvlink_supported is False:
+            links = "Not supported"
+        else:
+            links = "Unknown"
+
+        error_total = sum(
+            gpu.nvlink_error_counts.values()
+        )
+
+        table.add_row(
+            str(gpu.index),
+            links,
+            str(error_total),
+            gpu.fabric_state or "N/A",
+            gpu.fabric_status or "N/A",
+        )
+
+    console.print(table)
+
+    if fabric_manager.installed is True:
+        fm_status = (
+            "[green]ACTIVE[/green]"
+            if fabric_manager.active
+            else "[red]INACTIVE[/red]"
+        )
+
+        console.print(
+            f"Fabric Manager: {fm_status}"
+        )
+
+    if p2p_matrix:
+        p2p = Table(
+            title="NVLink P2P",
+            box=box.SIMPLE,
+        )
+
+        gpu_names = list(p2p_matrix.keys())
+
+        p2p.add_column("")
+
+        for name in gpu_names:
+            p2p.add_column(
+                name,
+                justify="center",
+            )
+
+        for row_name in gpu_names:
+            row = p2p_matrix[row_name]
+
+            p2p.add_row(
+                row_name,
+                *[
+                    row.get(column, "-")
+                    for column in gpu_names
+                ],
+            )
+
+        console.print(p2p)

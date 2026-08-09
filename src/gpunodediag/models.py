@@ -40,6 +40,14 @@ class XidEvent:
 
 
 @dataclass
+class FabricManagerStatus:
+    installed: Optional[bool] = None
+    active: Optional[bool] = None
+    load_state: Optional[str] = None
+    active_state: Optional[str] = None
+
+
+@dataclass
 class GPUInfo:
     index: int
     name: str
@@ -64,12 +72,24 @@ class GPUInfo:
     persistence_mode: Optional[str] = None
     mig_mode: Optional[str] = None
 
+    # NVML clock event state
     clock_event_mask: Optional[int] = None
     clock_event_sw_power_cap: Optional[bool] = None
     clock_event_hw_slowdown: Optional[bool] = None
     clock_event_sw_thermal_slowdown: Optional[bool] = None
 
+    # ECC
     ecc_supported: Optional[bool] = None
     ecc_enabled: Optional[bool] = None
     ecc_corrected_volatile: Optional[int] = None
     ecc_uncorrected_volatile: Optional[int] = None
+
+    # NVLink / GPU fabric
+    nvlink_supported: Optional[bool] = None
+    nvlink_total_links: int = 0
+    nvlink_active_links: int = 0
+    nvlink_inactive_links: list[int] = field(default_factory=list)
+    nvlink_error_counts: dict[str, int] = field(default_factory=dict)
+
+    fabric_state: Optional[str] = None
+    fabric_status: Optional[str] = None

@@ -6,6 +6,12 @@ import typer
 
 from gpunodediag import __version__
 from gpunodediag.checks.engine import run_diagnostics
+from gpunodediag.collectors.fabric import (
+    collect_fabric_manager_status,
+    collect_nvlink_p2p,
+    enrich_fabric_registration,
+    enrich_nvlink_state,
+)
 from gpunodediag.collectors.kernel_logs import collect_kernel_logs
 from gpunodediag.collectors.nvidia_smi import collect_gpus
 from gpunodediag.collectors.nvml import enrich_nvml_state
@@ -14,6 +20,7 @@ from gpunodediag.collectors.xid import parse_xid_events
 from gpunodediag.output.terminal import (
     console,
     print_banner,
+    print_fabric,
     print_findings,
     print_gpu_error,
     print_gpus,
@@ -62,19 +69,44 @@ def run(
     gpus, error = collect_gpus()
 
     if gpu is not None:
-        gpus = [item for item in gpus if item.index == gpu]
+        gpus = [
+            item
+            for item in gpus
+            if item.index == gpu
+        ]
 
         if not gpus and error is None:
             error = f"GPU index {gpu} was not found"
 
     notes: list[str] = []
     xid_events = []
+    p2p_matrix = {}
+
+    fabric_manager, fm_note = collect_fabric_manager_status()
+
+    if fm_note:
+        notes.append(fm_note)
 
     if gpus:
         nvml_note = enrich_nvml_state(gpus)
 
         if nvml_note:
             notes.append(nvml_note)
+
+        nvlink_note = enrich_nvlink_state(gpus)
+
+        if nvlink_note:
+            notes.append(nvlink_note)
+
+        fabric_note = enrich_fabric_registration(gpus)
+
+        if fabric_note:
+            notes.append(fabric_note)
+
+        p2p_matrix, p2p_note = collect_nvlink_p2p()
+
+        if p2p_note:
+            notes.append(p2p_note)
 
         kernel_text, kernel_note = collect_kernel_logs()
 
@@ -91,6 +123,7 @@ def run(
         run_diagnostics(
             gpus,
             xid_events=xid_events,
+            fabric_manager=fabric_manager,
         )
         if gpus
         else []
@@ -101,7 +134,12 @@ def run(
             "tool": "GPUNodeDiag",
             "version": __version__,
             "host": asdict(host),
-            "gpus": [asdict(item) for item in gpus],
+            "gpus": [
+                asdict(item)
+                for item in gpus
+            ],
+            "fabric_manager": asdict(fabric_manager),
+            "nvlink_p2p": p2p_matrix,
             "xid_events": [
                 asdict(item)
                 for item in xid_events
@@ -117,7 +155,12 @@ def run(
             "error": error,
         }
 
-        typer.echo(json.dumps(payload, indent=2))
+        typer.echo(
+            json.dumps(
+                payload,
+                indent=2,
+            )
+        )
         return
 
     print_banner(__version__)
@@ -128,6 +171,13 @@ def run(
         return
 
     print_gpus(gpus)
+
+    print_fabric(
+        gpus,
+        fabric_manager,
+        p2p_matrix,
+    )
+
     print_findings(findings)
 
     if notes:
