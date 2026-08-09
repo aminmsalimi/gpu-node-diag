@@ -291,3 +291,150 @@ def print_fabric(
             )
 
         console.print(p2p)
+
+def print_dcgm(
+    status,
+    results,
+    deep_requested: bool,
+) -> None:
+    from rich import box
+    from rich.panel import Panel
+    from rich.table import Table
+
+    if not status.installed:
+        text = "[dim]DCGM not detected[/dim]"
+
+        if deep_requested:
+            text += (
+                "\n[yellow]Deep diagnostics could not run.[/yellow]"
+            )
+
+        console.print(
+            Panel(
+                text,
+                title="DCGM",
+                border_style="dim",
+            )
+        )
+        return
+
+    table = Table(
+        title="NVIDIA DCGM",
+        box=box.ROUNDED,
+        show_header=False,
+    )
+
+    table.add_column("Field", style="dim")
+    table.add_column("Value")
+
+    table.add_row(
+        "Installed",
+        "[green]YES[/green]",
+    )
+
+    table.add_row(
+        "Version",
+        status.version or "Unknown",
+    )
+
+    if status.hostengine_reachable is True:
+        hostengine = "[green]REACHABLE[/green]"
+    elif status.hostengine_reachable is False:
+        hostengine = "[red]UNREACHABLE[/red]"
+    else:
+        hostengine = "Unknown"
+
+    table.add_row(
+        "Host Engine",
+        hostengine,
+    )
+
+    console.print(table)
+
+    if deep_requested:
+        if not results:
+            console.print(
+                "[yellow]Deep diagnostic returned no test results.[/yellow]"
+            )
+            return
+
+        passed = sum(
+            1
+            for item in results
+            if item.status.lower() in {
+                "pass",
+                "passed",
+            }
+        )
+
+        warnings = sum(
+            1
+            for item in results
+            if item.status.lower() in {
+                "warn",
+                "warning",
+            }
+        )
+
+        failed = sum(
+            1
+            for item in results
+            if item.status.lower() in {
+                "fail",
+                "failed",
+                "failure",
+            }
+        )
+
+        skipped = sum(
+            1
+            for item in results
+            if item.status.lower() in {
+                "skip",
+                "skipped",
+                "not run",
+                "not_run",
+            }
+        )
+
+        diag = Table(
+            title="DCGM Level 2 Diagnostics",
+            box=box.SIMPLE,
+        )
+
+        diag.add_column("Test")
+        diag.add_column("Entity")
+        diag.add_column("Status")
+
+        for item in results:
+            entity = item.entity_group or "-"
+
+            if item.entity_id is not None:
+                entity += f" {item.entity_id}"
+
+            state = item.status.lower()
+
+            if state in {"pass", "passed"}:
+                shown = f"[green]{item.status}[/green]"
+            elif state in {"warn", "warning"}:
+                shown = f"[yellow]{item.status}[/yellow]"
+            elif state in {"fail", "failed", "failure"}:
+                shown = f"[red]{item.status}[/red]"
+            else:
+                shown = f"[dim]{item.status}[/dim]"
+
+            diag.add_row(
+                item.name,
+                entity,
+                shown,
+            )
+
+        console.print(diag)
+
+        console.print(
+            f"DCGM summary: "
+            f"[green]{passed} passed[/green], "
+            f"[yellow]{warnings} warnings[/yellow], "
+            f"[red]{failed} failed[/red], "
+            f"[dim]{skipped} skipped[/dim]"
+        )

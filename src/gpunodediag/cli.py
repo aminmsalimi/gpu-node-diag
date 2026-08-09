@@ -6,6 +6,10 @@ import typer
 
 from gpunodediag import __version__
 from gpunodediag.checks.engine import run_diagnostics
+from gpunodediag.collectors.dcgm import (
+    collect_dcgm_status,
+    run_dcgm_diagnostics,
+)
 from gpunodediag.collectors.fabric import (
     collect_fabric_manager_status,
     collect_nvlink_p2p,
@@ -20,6 +24,7 @@ from gpunodediag.collectors.xid import parse_xid_events
 from gpunodediag.output.terminal import (
     console,
     print_banner,
+    print_dcgm,
     print_fabric,
     print_findings,
     print_gpu_error,
@@ -44,6 +49,14 @@ def run(
         "--gpu",
         "-g",
         help="Inspect only a specific GPU index.",
+    ),
+    deep: bool = typer.Option(
+        False,
+        "--deep",
+        help=(
+            "Run active DCGM Level 2 diagnostics. "
+            "May take several minutes and exercise the GPUs."
+        ),
     ),
     json_output: bool = typer.Option(
         False,
@@ -81,8 +94,13 @@ def run(
     notes: list[str] = []
     xid_events = []
     p2p_matrix = {}
+    dcgm_results = []
 
-    fabric_manager, fm_note = collect_fabric_manager_status()
+    dcgm_status = collect_dcgm_status()
+
+    fabric_manager, fm_note = (
+        collect_fabric_manager_status()
+    )
 
     if fm_note:
         notes.append(fm_note)
@@ -119,14 +137,32 @@ def run(
                 gpus,
             )
 
+    if deep:
+        dcgm_results, dcgm_note = (
+            run_dcgm_diagnostics(
+                level=2,
+            )
+        )
+
+        if dcgm_note:
+            notes.append(dcgm_note)
+
     findings = (
         run_diagnostics(
             gpus,
             xid_events=xid_events,
             fabric_manager=fabric_manager,
+            dcgm_status=dcgm_status,
+            dcgm_results=dcgm_results,
+            deep_requested=deep,
         )
         if gpus
-        else []
+        else run_diagnostics(
+            [],
+            dcgm_status=dcgm_status,
+            dcgm_results=dcgm_results,
+            deep_requested=deep,
+        )
     )
 
     if json_output:
@@ -138,7 +174,17 @@ def run(
                 asdict(item)
                 for item in gpus
             ],
-            "fabric_manager": asdict(fabric_manager),
+            "dcgm": {
+                "status": asdict(dcgm_status),
+                "deep_requested": deep,
+                "results": [
+                    asdict(item)
+                    for item in dcgm_results
+                ],
+            },
+            "fabric_manager": asdict(
+                fabric_manager
+            ),
             "nvlink_p2p": p2p_matrix,
             "xid_events": [
                 asdict(item)
@@ -168,14 +214,20 @@ def run(
 
     if error:
         print_gpu_error(error)
-        return
 
-    print_gpus(gpus)
+    if gpus:
+        print_gpus(gpus)
 
-    print_fabric(
-        gpus,
-        fabric_manager,
-        p2p_matrix,
+        print_fabric(
+            gpus,
+            fabric_manager,
+            p2p_matrix,
+        )
+
+    print_dcgm(
+        dcgm_status,
+        dcgm_results,
+        deep,
     )
 
     print_findings(findings)

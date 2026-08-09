@@ -93,3 +93,21 @@ class GPUInfo:
 
     fabric_state: Optional[str] = None
     fabric_status: Optional[str] = None
+
+@dataclass
+class DCGMStatus:
+    installed: bool = False
+    version: Optional[str] = None
+    hostengine_reachable: Optional[bool] = None
+    discovery_ok: Optional[bool] = None
+    error: Optional[str] = None
+
+
+@dataclass
+class DCGMTestResult:
+    name: str
+    status: str
+    entity_group: Optional[str] = None
+    entity_id: Optional[int] = None
+    info: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
