@@ -177,14 +177,30 @@ $checksFound = $false
 
 for ($i = 1; $i -le 36; $i++) {
 
-    $statusJson = gh pr view $prNumber --json statusCheckRollup
+    # GitHub GraphQL/API occasionally returns transient errors.
+    # Do not abort the entire feature workflow; retry instead.
+    $oldPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
 
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "Unable to query PR status." -ForegroundColor Red
-        exit 1
+    $statusJson = gh pr view $prNumber --json statusCheckRollup 2>$null
+    $queryExitCode = $LASTEXITCODE
+
+    $ErrorActionPreference = $oldPreference
+
+    if ($queryExitCode -ne 0) {
+        Write-Host "Temporary GitHub API error... retrying in 5 seconds ($i/36)" -ForegroundColor Yellow
+        Start-Sleep -Seconds 5
+        continue
     }
 
-    $statusData = $statusJson | ConvertFrom-Json
+    try {
+        $statusData = $statusJson | ConvertFrom-Json
+    }
+    catch {
+        Write-Host "Invalid GitHub API response... retrying in 5 seconds ($i/36)" -ForegroundColor Yellow
+        Start-Sleep -Seconds 5
+        continue
+    }
 
     if ($null -eq $statusData.statusCheckRollup) {
         $checkCount = 0
@@ -210,7 +226,6 @@ if (-not $checksFound) {
     Write-Host $prUrl
     exit 1
 }
-
 # ============================================================
 # Wait for checks
 # ============================================================
@@ -266,13 +281,24 @@ if ($LASTEXITCODE -ne 0) {
 # Delete finished branches
 # ============================================================
 
+$oldPreference = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+
 git push origin --delete $branch 2>$null
+$remoteDeleteExit = $LASTEXITCODE
 
 git branch -d $branch 2>$null
+$localDeleteExit = $LASTEXITCODE
 
-# ============================================================
-# Finished
-# ============================================================
+$ErrorActionPreference = $oldPreference
+
+if ($remoteDeleteExit -ne 0) {
+    Write-Host "Remote branch was already deleted or could not be removed." -ForegroundColor Yellow
+}
+
+if ($localDeleteExit -ne 0) {
+    Write-Host "Local feature branch was already deleted or could not be removed." -ForegroundColor Yellow
+}
 
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Green
