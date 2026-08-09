@@ -10,9 +10,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# --------------------------------------------------
+# ============================================================
 # Safety
-# --------------------------------------------------
+# ============================================================
 
 $branch = (git branch --show-current).Trim()
 
@@ -34,9 +34,9 @@ if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
 Write-Host ""
 Write-Host "Branch: $branch" -ForegroundColor Cyan
 
-# --------------------------------------------------
-# Local tests
-# --------------------------------------------------
+# ============================================================
+# Tests
+# ============================================================
 
 Write-Host ""
 Write-Host "Running tests..." -ForegroundColor Cyan
@@ -52,15 +52,18 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host ""
 Write-Host "Tests passed." -ForegroundColor Green
 
-# --------------------------------------------------
-# Commit
-# --------------------------------------------------
+# ============================================================
+# Commit changes if any
+# ============================================================
 
 git add -A
 
 $changes = git status --porcelain
 
 if ($changes) {
+    Write-Host ""
+    Write-Host "Committing changes..." -ForegroundColor Cyan
+
     git commit -m $Commit
 
     if ($LASTEXITCODE -ne 0) {
@@ -71,9 +74,9 @@ else {
     Write-Host "No uncommitted changes."
 }
 
-# --------------------------------------------------
-# Push
-# --------------------------------------------------
+# ============================================================
+# Push branch
+# ============================================================
 
 Write-Host ""
 Write-Host "Pushing $branch..." -ForegroundColor Cyan
@@ -84,23 +87,41 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# --------------------------------------------------
-# Find or create PR
-# --------------------------------------------------
+# ============================================================
+# Find existing PR
+# ============================================================
 
-$prUrl = gh pr list `
+Write-Host ""
+Write-Host "Checking for existing pull request..." -ForegroundColor Cyan
+
+$prJson = gh pr list `
     --head $branch `
     --base main `
     --state open `
-    --json url `
-    --jq '.[0].url // ""'
+    --json number,url
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Unable to query pull requests." -ForegroundColor Red
     exit 1
 }
 
-if ([string]::IsNullOrWhiteSpace($prUrl)) {
+$prList = $prJson | ConvertFrom-Json
+$prNumber = $null
+$prUrl = $null
+
+if ($prList -and @($prList).Count -gt 0) {
+    $prNumber = @($prList)[0].number
+    $prUrl = @($prList)[0].url
+
+    Write-Host "Existing PR found: #$prNumber" -ForegroundColor Green
+    Write-Host $prUrl
+}
+
+# ============================================================
+# Create PR if none exists
+# ============================================================
+
+if (-not $prNumber) {
 
     if ([string]::IsNullOrWhiteSpace($Body)) {
         $Body = @"
@@ -130,41 +151,51 @@ All diagnostics remain read-only unless explicitly requested.
         exit 1
     }
 
-    $prUrl = gh pr view $branch --json url --jq '.url'
-}
-else {
-    Write-Host ""
-    Write-Host "Existing PR: $prUrl" -ForegroundColor Cyan
+    $prJson = gh pr view $branch --json number,url
+
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "PR created but could not read PR details." -ForegroundColor Red
+        exit 1
+    }
+
+    $pr = $prJson | ConvertFrom-Json
+    $prNumber = $pr.number
+    $prUrl = $pr.url
+
+    Write-Host "Created PR #$prNumber" -ForegroundColor Green
+    Write-Host $prUrl
 }
 
-# --------------------------------------------------
-# Wait for GitHub Actions to register
-# --------------------------------------------------
+# ============================================================
+# Wait for GitHub Actions to appear
+# ============================================================
 
 Write-Host ""
-Write-Host "Waiting for GitHub Actions..." -ForegroundColor Cyan
+Write-Host "Waiting for GitHub Actions to register..." -ForegroundColor Cyan
 
 $checksFound = $false
 
 for ($i = 1; $i -le 36; $i++) {
 
-    $checkCount = gh pr view $branch `
-        --json statusCheckRollup `
-        --jq '.statusCheckRollup | length'
+    $statusJson = gh pr view $prNumber --json statusCheckRollup
 
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "Unable to query PR checks." -ForegroundColor Red
+        Write-Host "Unable to query PR status." -ForegroundColor Red
         exit 1
     }
 
-    $count = 0
-    [int]::TryParse(
-        $checkCount.ToString().Trim(),
-        [ref]$count
-    ) | Out-Null
+    $statusData = $statusJson | ConvertFrom-Json
 
-    if ($count -gt 0) {
+    if ($null -eq $statusData.statusCheckRollup) {
+        $checkCount = 0
+    }
+    else {
+        $checkCount = @($statusData.statusCheckRollup).Count
+    }
+
+    if ($checkCount -gt 0) {
         $checksFound = $true
+        Write-Host "Detected $checkCount CI check(s)." -ForegroundColor Green
         break
     }
 
@@ -180,48 +211,44 @@ if (-not $checksFound) {
     exit 1
 }
 
-# --------------------------------------------------
-# Watch CI
-# --------------------------------------------------
+# ============================================================
+# Wait for checks
+# ============================================================
 
 Write-Host ""
-Write-Host "CI detected. Waiting for completion..." -ForegroundColor Cyan
+Write-Host "Waiting for CI to finish..." -ForegroundColor Cyan
 
-$oldPreference = $ErrorActionPreference
-$ErrorActionPreference = "Continue"
+gh pr checks $prNumber --watch --fail-fast
 
-gh pr checks $branch --watch --fail-fast
-
-$ciExitCode = $LASTEXITCODE
-$ErrorActionPreference = $oldPreference
-
-if ($ciExitCode -ne 0) {
+if ($LASTEXITCODE -ne 0) {
     Write-Host ""
-    Write-Host "CI failed. PR left open and was NOT merged." -ForegroundColor Red
+    Write-Host "CI failed." -ForegroundColor Red
+    Write-Host "PR left open and was NOT merged."
     Write-Host $prUrl
     exit 1
 }
 
-# --------------------------------------------------
+# ============================================================
 # Merge
-# --------------------------------------------------
+# ============================================================
 
 Write-Host ""
 Write-Host "CI passed." -ForegroundColor Green
-Write-Host "Merging PR..." -ForegroundColor Cyan
+Write-Host "Merging PR #$prNumber..." -ForegroundColor Cyan
 
-gh pr merge $branch `
-    --merge `
-    --delete-branch
+gh pr merge $prNumber --merge
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Merge failed. PR remains open." -ForegroundColor Red
     exit 1
 }
 
-# --------------------------------------------------
-# Sync main
-# --------------------------------------------------
+# ============================================================
+# Return to main
+# ============================================================
+
+Write-Host ""
+Write-Host "Updating local main..." -ForegroundColor Cyan
 
 git checkout main
 
@@ -235,15 +262,27 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
+# ============================================================
+# Delete finished branches
+# ============================================================
+
+git push origin --delete $branch 2>$null
+
+git branch -d $branch 2>$null
+
+# ============================================================
+# Finished
+# ============================================================
+
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Green
-Write-Host "DONE" -ForegroundColor Green
+Write-Host " FEATURE FINISHED" -ForegroundColor Green
 Write-Host "============================================"
 Write-Host "Local tests:       PASSED"
 Write-Host "Push:              DONE"
-Write-Host "Pull request:      DONE"
+Write-Host "Pull request:      #$prNumber"
 Write-Host "GitHub Actions:    PASSED"
 Write-Host "Merge:             DONE"
-Write-Host "Remote branch:     DELETED"
+Write-Host "Feature branch:    DELETED"
 Write-Host "Local main:        UPDATED"
 Write-Host "============================================"
