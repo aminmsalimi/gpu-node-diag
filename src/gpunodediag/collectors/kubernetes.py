@@ -38,15 +38,8 @@ def parse_kubernetes_nodes(
         metadata = item.get("metadata", {})
         status = item.get("status", {})
 
-        capacity = status.get(
-            "capacity",
-            {},
-        )
-
-        allocatable = status.get(
-            "allocatable",
-            {},
-        )
+        capacity = status.get("capacity", {})
+        allocatable = status.get("allocatable", {})
 
         mig_capacity = {
             key: _to_int(value)
@@ -62,21 +55,12 @@ def parse_kubernetes_nodes(
 
         nodes.append(
             KubernetesGPUNode(
-                name=metadata.get(
-                    "name",
-                    "unknown",
-                ),
+                name=metadata.get("name", "unknown"),
                 gpu_capacity=_to_int(
-                    capacity.get(
-                        "nvidia.com/gpu",
-                        0,
-                    )
+                    capacity.get("nvidia.com/gpu", 0)
                 ),
                 gpu_allocatable=_to_int(
-                    allocatable.get(
-                        "nvidia.com/gpu",
-                        0,
-                    )
+                    allocatable.get("nvidia.com/gpu", 0)
                 ),
                 mig_capacity=mig_capacity,
                 mig_allocatable=mig_allocatable,
@@ -89,52 +73,31 @@ def parse_kubernetes_nodes(
 def _is_device_plugin_pod(
     pod: dict,
 ) -> bool:
-    metadata = pod.get(
-        "metadata",
-        {},
-    )
+    metadata = pod.get("metadata", {})
 
     name = str(
-        metadata.get(
-            "name",
-            "",
-        )
+        metadata.get("name", "")
     ).lower()
 
     if "nvidia-device-plugin" in name:
         return True
 
-    labels = metadata.get(
-        "labels",
-        {},
-    )
+    labels = metadata.get("labels", {})
 
     if any(
-        "nvidia-device-plugin"
-        in str(value).lower()
+        "nvidia-device-plugin" in str(value).lower()
         for value in labels.values()
     ):
         return True
 
     containers = (
-        pod.get(
-            "spec",
-            {},
-        )
-        .get(
-            "containers",
-            [],
-        )
+        pod.get("spec", {})
+        .get("containers", [])
     )
 
     return any(
         "nvidia-device-plugin"
-        in str(
-            container.get(
-                "name",
-                "",
-            )
-        ).lower()
+        in str(container.get("name", "")).lower()
         for container in containers
     )
 
@@ -148,15 +111,8 @@ def parse_device_plugin_pods(
         if not _is_device_plugin_pod(item):
             continue
 
-        metadata = item.get(
-            "metadata",
-            {},
-        )
-
-        pod_status = item.get(
-            "status",
-            {},
-        )
+        metadata = item.get("metadata", {})
+        pod_status = item.get("status", {})
 
         containers = pod_status.get(
             "containerStatuses",
@@ -166,22 +122,14 @@ def parse_device_plugin_pods(
         ready = (
             bool(containers)
             and all(
-                bool(
-                    container.get(
-                        "ready",
-                        False,
-                    )
-                )
+                bool(container.get("ready", False))
                 for container in containers
             )
         )
 
         restarts = sum(
             _to_int(
-                container.get(
-                    "restartCount",
-                    0,
-                )
+                container.get("restartCount", 0)
             )
             for container in containers
         )
@@ -240,13 +188,8 @@ def collect_kubernetes_status() -> KubernetesStatus:
 
             result.client_version = (
                 document
-                .get(
-                    "clientVersion",
-                    {},
-                )
-                .get(
-                    "gitVersion"
-                )
+                .get("clientVersion", {})
+                .get("gitVersion")
             )
 
     except Exception:
@@ -332,9 +275,7 @@ def collect_kubernetes_status() -> KubernetesStatus:
         if pods.returncode == 0:
             result.device_plugin_pods = (
                 parse_device_plugin_pods(
-                    json.loads(
-                        pods.stdout
-                    )
+                    json.loads(pods.stdout)
                 )
             )
         else:

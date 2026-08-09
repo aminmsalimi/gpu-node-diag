@@ -5,6 +5,7 @@ from typing import Optional
 import typer
 
 from gpunodediag import __version__
+from gpunodediag.commands.stack import stack_command
 from gpunodediag.commands.container import container_command
 from gpunodediag.commands.k8s import k8s_command
 from gpunodediag.checks.engine import run_diagnostics
@@ -51,6 +52,8 @@ app.command("report")(report_command)
 
 app.command("container")(container_command)
 app.command("k8s")(k8s_command)
+
+app.command("stack")(stack_command)
 
 @app.callback(invoke_without_command=True)
 def run(
