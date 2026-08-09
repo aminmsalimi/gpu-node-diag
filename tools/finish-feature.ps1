@@ -266,13 +266,24 @@ if ($LASTEXITCODE -ne 0) {
 # Delete finished branches
 # ============================================================
 
+$oldPreference = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+
 git push origin --delete $branch 2>$null
+$remoteDeleteExit = $LASTEXITCODE
 
 git branch -d $branch 2>$null
+$localDeleteExit = $LASTEXITCODE
 
-# ============================================================
-# Finished
-# ============================================================
+$ErrorActionPreference = $oldPreference
+
+if ($remoteDeleteExit -ne 0) {
+    Write-Host "Remote branch was already deleted or could not be removed." -ForegroundColor Yellow
+}
+
+if ($localDeleteExit -ne 0) {
+    Write-Host "Local feature branch was already deleted or could not be removed." -ForegroundColor Yellow
+}
 
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Green
