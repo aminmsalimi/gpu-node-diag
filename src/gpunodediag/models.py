@@ -111,3 +111,58 @@ class DCGMTestResult:
     entity_id: Optional[int] = None
     info: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+
+@dataclass
+class ContainerRuntimeInfo:
+    name: str
+    installed: bool = False
+    executable: Optional[str] = None
+    active: Optional[bool] = None
+    nvidia_configured: Optional[bool] = None
+    config_paths: list[str] = field(default_factory=list)
+
+
+@dataclass
+class ContainerStatus:
+    platform: str
+    runtimes: list[ContainerRuntimeInfo] = field(default_factory=list)
+    nvidia_ctk: bool = False
+    nvidia_ctk_version: Optional[str] = None
+    nvidia_container_runtime: bool = False
+    nvidia_container_cli: bool = False
+    device_nodes: list[str] = field(default_factory=list)
+    missing_device_nodes: list[str] = field(default_factory=list)
+    cdi_devices: list[str] = field(default_factory=list)
+    cdi_error: Optional[str] = None
+    notes: list[str] = field(default_factory=list)
+
+
+@dataclass
+class KubernetesGPUNode:
+    name: str
+    gpu_capacity: int = 0
+    gpu_allocatable: int = 0
+    mig_capacity: dict[str, int] = field(default_factory=dict)
+    mig_allocatable: dict[str, int] = field(default_factory=dict)
+
+
+@dataclass
+class KubernetesPodStatus:
+    namespace: str
+    name: str
+    phase: str
+    ready: bool = False
+    restarts: int = 0
+
+
+@dataclass
+class KubernetesStatus:
+    kubectl_installed: bool = False
+    kubectl_path: Optional[str] = None
+    client_version: Optional[str] = None
+    current_context: Optional[str] = None
+    cluster_reachable: Optional[bool] = None
+    nodes: list[KubernetesGPUNode] = field(default_factory=list)
+    device_plugin_pods: list[KubernetesPodStatus] = field(default_factory=list)
+    error: Optional[str] = None
+    notes: list[str] = field(default_factory=list)
