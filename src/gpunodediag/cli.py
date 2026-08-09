@@ -1,4 +1,4 @@
-﻿import json
+import json
 from dataclasses import asdict
 from typing import Optional
 
@@ -6,9 +6,11 @@ import typer
 
 from gpunodediag import __version__
 from gpunodediag.checks.engine import run_diagnostics
+from gpunodediag.collectors.kernel_logs import collect_kernel_logs
 from gpunodediag.collectors.nvidia_smi import collect_gpus
-from gpunodediag.collectors.nvml import enrich_clock_events
+from gpunodediag.collectors.nvml import enrich_nvml_state
 from gpunodediag.collectors.system import collect_host_info
+from gpunodediag.collectors.xid import parse_xid_events
 from gpunodediag.output.terminal import (
     console,
     print_banner,
@@ -66,14 +68,33 @@ def run(
             error = f"GPU index {gpu} was not found"
 
     notes: list[str] = []
+    xid_events = []
 
     if gpus:
-        nvml_note = enrich_clock_events(gpus)
+        nvml_note = enrich_nvml_state(gpus)
 
         if nvml_note:
             notes.append(nvml_note)
 
-    findings = run_diagnostics(gpus) if gpus else []
+        kernel_text, kernel_note = collect_kernel_logs()
+
+        if kernel_note:
+            notes.append(kernel_note)
+
+        if kernel_text:
+            xid_events = parse_xid_events(
+                kernel_text,
+                gpus,
+            )
+
+    findings = (
+        run_diagnostics(
+            gpus,
+            xid_events=xid_events,
+        )
+        if gpus
+        else []
+    )
 
     if json_output:
         payload = {
@@ -81,6 +102,10 @@ def run(
             "version": __version__,
             "host": asdict(host),
             "gpus": [asdict(item) for item in gpus],
+            "xid_events": [
+                asdict(item)
+                for item in xid_events
+            ],
             "findings": [
                 {
                     **asdict(item),

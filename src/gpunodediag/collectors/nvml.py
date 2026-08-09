@@ -1,34 +1,81 @@
-﻿from typing import Optional
+from typing import Optional
 
 import pynvml
 
 from gpunodediag.models import GPUInfo
 
 
-# NVML clock-event bit values.
-#
-# SW Power Cap:
-# GPU clocks are being constrained by software power management.
 SW_POWER_CAP = 0x0000000000000004
-
-# HW Slowdown:
-# Significant hardware-driven clock reduction is active.
 HW_SLOWDOWN = 0x0000000000000008
-
-# SW Thermal Slowdown:
-# Software thermal control is reducing clocks.
 SW_THERMAL_SLOWDOWN = 0x0000000000000020
 
 
-def enrich_clock_events(gpus: list[GPUInfo]) -> Optional[str]:
-    """
-    Enrich GPUInfo objects with current NVML clock-event reasons.
+def _collect_clock_events(handle, gpu: GPUInfo) -> None:
+    get_reasons = getattr(
+        pynvml,
+        "nvmlDeviceGetCurrentClocksEventReasons",
+        None,
+    )
 
-    Returns an informational error string if NVML clock-event
-    information could not be collected. Diagnostics remain usable
-    even when this optional capability is unavailable.
-    """
+    if get_reasons is None:
+        get_reasons = getattr(
+            pynvml,
+            "nvmlDeviceGetCurrentClocksThrottleReasons",
+            None,
+        )
 
+    if get_reasons is None:
+        return
+
+    mask = int(get_reasons(handle))
+
+    gpu.clock_event_mask = mask
+    gpu.clock_event_sw_power_cap = bool(mask & SW_POWER_CAP)
+    gpu.clock_event_hw_slowdown = bool(mask & HW_SLOWDOWN)
+    gpu.clock_event_sw_thermal_slowdown = bool(
+        mask & SW_THERMAL_SLOWDOWN
+    )
+
+
+def _collect_ecc(handle, gpu: GPUInfo) -> None:
+    try:
+        current_mode, _pending_mode = pynvml.nvmlDeviceGetEccMode(handle)
+
+        gpu.ecc_supported = True
+        gpu.ecc_enabled = bool(current_mode)
+
+    except pynvml.NVMLError_NotSupported:
+        gpu.ecc_supported = False
+        gpu.ecc_enabled = False
+        return
+
+    if not gpu.ecc_enabled:
+        return
+
+    try:
+        gpu.ecc_corrected_volatile = int(
+            pynvml.nvmlDeviceGetTotalEccErrors(
+                handle,
+                pynvml.NVML_MEMORY_ERROR_TYPE_CORRECTED,
+                pynvml.NVML_VOLATILE_ECC,
+            )
+        )
+    except pynvml.NVMLError_NotSupported:
+        gpu.ecc_corrected_volatile = None
+
+    try:
+        gpu.ecc_uncorrected_volatile = int(
+            pynvml.nvmlDeviceGetTotalEccErrors(
+                handle,
+                pynvml.NVML_MEMORY_ERROR_TYPE_UNCORRECTED,
+                pynvml.NVML_VOLATILE_ECC,
+            )
+        )
+    except pynvml.NVMLError_NotSupported:
+        gpu.ecc_uncorrected_volatile = None
+
+
+def enrich_nvml_state(gpus: list[GPUInfo]) -> Optional[str]:
     if not gpus:
         return None
 
@@ -40,42 +87,16 @@ def enrich_clock_events(gpus: list[GPUInfo]) -> Optional[str]:
     errors: list[str] = []
 
     try:
-        get_reasons = getattr(
-            pynvml,
-            "nvmlDeviceGetCurrentClocksEventReasons",
-            None,
-        )
-
-        # Compatibility fallback for older Python bindings/drivers.
-        if get_reasons is None:
-            get_reasons = getattr(
-                pynvml,
-                "nvmlDeviceGetCurrentClocksThrottleReasons",
-                None,
-            )
-
-        if get_reasons is None:
-            return "NVML clock-event API is unavailable"
-
         for gpu in gpus:
             try:
                 handle = pynvml.nvmlDeviceGetHandleByUUID(gpu.uuid)
-                mask = int(get_reasons(handle))
 
-                gpu.clock_event_mask = mask
-                gpu.clock_event_sw_power_cap = bool(
-                    mask & SW_POWER_CAP
-                )
-                gpu.clock_event_hw_slowdown = bool(
-                    mask & HW_SLOWDOWN
-                )
-                gpu.clock_event_sw_thermal_slowdown = bool(
-                    mask & SW_THERMAL_SLOWDOWN
-                )
+                _collect_clock_events(handle, gpu)
+                _collect_ecc(handle, gpu)
 
             except Exception as exc:
                 errors.append(
-                    f"GPU {gpu.index}: unable to read clock events: {exc}"
+                    f"GPU {gpu.index}: NVML collection failed: {exc}"
                 )
 
     finally:
@@ -88,3 +109,8 @@ def enrich_clock_events(gpus: list[GPUInfo]) -> Optional[str]:
         return "; ".join(errors)
 
     return None
+
+
+# Backward-compatible alias used by older code.
+def enrich_clock_events(gpus: list[GPUInfo]) -> Optional[str]:
+    return enrich_nvml_state(gpus)

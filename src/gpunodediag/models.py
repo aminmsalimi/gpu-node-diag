@@ -1,4 +1,4 @@
-﻿from dataclasses import dataclass, field
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Optional
 
@@ -31,11 +31,22 @@ class HostInfo:
 
 
 @dataclass
+class XidEvent:
+    xid: int
+    raw_message: str
+    pci_bus_id: Optional[str] = None
+    gpu_index: Optional[int] = None
+    timestamp: Optional[str] = None
+
+
+@dataclass
 class GPUInfo:
     index: int
     name: str
     uuid: str
     driver_version: str
+
+    pci_bus_id: Optional[str] = None
 
     temperature_c: Optional[float] = None
     power_draw_w: Optional[float] = None
@@ -53,9 +64,12 @@ class GPUInfo:
     persistence_mode: Optional[str] = None
     mig_mode: Optional[str] = None
 
-    # NVML clock-event state.
-    # None means the value was not available / not checked.
     clock_event_mask: Optional[int] = None
     clock_event_sw_power_cap: Optional[bool] = None
     clock_event_hw_slowdown: Optional[bool] = None
     clock_event_sw_thermal_slowdown: Optional[bool] = None
+
+    ecc_supported: Optional[bool] = None
+    ecc_enabled: Optional[bool] = None
+    ecc_corrected_volatile: Optional[int] = None
+    ecc_uncorrected_volatile: Optional[int] = None
