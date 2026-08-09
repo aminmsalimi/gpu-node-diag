@@ -52,3 +52,10 @@ class GPUInfo:
 
     persistence_mode: Optional[str] = None
     mig_mode: Optional[str] = None
+
+    # NVML clock-event state.
+    # None means the value was not available / not checked.
+    clock_event_mask: Optional[int] = None
+    clock_event_sw_power_cap: Optional[bool] = None
+    clock_event_hw_slowdown: Optional[bool] = None
+    clock_event_sw_thermal_slowdown: Optional[bool] = None

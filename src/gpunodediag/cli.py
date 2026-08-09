@@ -7,6 +7,7 @@ import typer
 from gpunodediag import __version__
 from gpunodediag.checks.engine import run_diagnostics
 from gpunodediag.collectors.nvidia_smi import collect_gpus
+from gpunodediag.collectors.nvml import enrich_clock_events
 from gpunodediag.collectors.system import collect_host_info
 from gpunodediag.output.terminal import (
     console,
@@ -64,6 +65,14 @@ def run(
         if not gpus and error is None:
             error = f"GPU index {gpu} was not found"
 
+    notes: list[str] = []
+
+    if gpus:
+        nvml_note = enrich_clock_events(gpus)
+
+        if nvml_note:
+            notes.append(nvml_note)
+
     findings = run_diagnostics(gpus) if gpus else []
 
     if json_output:
@@ -79,6 +88,7 @@ def run(
                 }
                 for item in findings
             ],
+            "notes": notes,
             "error": error,
         }
 
@@ -94,6 +104,12 @@ def run(
 
     print_gpus(gpus)
     print_findings(findings)
+
+    if notes:
+        for note in notes:
+            console.print(
+                f"[dim]Capability note: {note}[/dim]"
+            )
 
 
 def main() -> None:
