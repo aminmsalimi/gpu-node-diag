@@ -1,3 +1,5 @@
+import os
+import time
 from dataclasses import dataclass
 
 from rich import box
@@ -28,17 +30,55 @@ class ScanProgress:
     """
     Live GPUNodeDiag diagnostic checklist.
 
-    The final checklist remains visible after the scan so the user
-    can immediately see which stages passed, were skipped, warned,
-    or failed.
+    Human-facing terminal scans intentionally remain visible long
+    enough for the user to follow the individual diagnostic stages.
+
+    JSON/non-interactive execution is never artificially delayed.
     """
 
     def __init__(
         self,
         console: Console,
         deep: bool = False,
+        minimum_duration: float = 7.0,
     ) -> None:
         self.console = console
+
+        # Only animate/delay when connected to a real interactive terminal.
+        #
+        # This keeps:
+        #   pytest
+        #   gdiag --json
+        #   redirected output
+        #   automation
+        #
+        # fast.
+        self.animated = (
+            bool(console.is_terminal)
+            and os.environ.get(
+                "GDIAG_NO_ANIMATION",
+                "",
+            ).lower()
+            not in {
+                "1",
+                "true",
+                "yes",
+            }
+        )
+
+        self.minimum_duration = (
+            minimum_duration
+            if self.animated
+            else 0.0
+        )
+
+        self.step_pause = (
+            0.30
+            if self.animated
+            else 0.0
+        )
+
+        self._started_at: float | None = None
 
         definitions = [
             (
@@ -111,6 +151,8 @@ class ScanProgress:
         if self.live is not None:
             return
 
+        self._started_at = time.monotonic()
+
         self.live = Live(
             self.render(),
             console=self.console,
@@ -125,10 +167,87 @@ class ScanProgress:
         if self.live is None:
             return
 
+        final_label = self.overall_label
+        final_style = self.overall_style
+        final_detail = self.overall_detail
+
+        # ----------------------------------------------------
+        # Presentation phase
+        #
+        # If the real diagnostics completed extremely quickly,
+        # keep the terminal UI alive until the minimum scan
+        # duration has elapsed.
+        #
+        # A real slow scan is never delayed further.
+        # ----------------------------------------------------
+
+        if (
+            self.animated
+            and self._started_at is not None
+        ):
+            elapsed = (
+                time.monotonic()
+                - self._started_at
+            )
+
+            remaining = max(
+                0.0,
+                self.minimum_duration
+                - elapsed,
+            )
+
+            frame = 0
+
+            while remaining > 0:
+                dots = "." * (
+                    (frame % 3) + 1
+                )
+
+                self.overall_label = (
+                    "FINALIZING"
+                )
+
+                self.overall_style = "cyan"
+
+                self.overall_detail = (
+                    "Correlating findings "
+                    f"and preparing results{dots}"
+                )
+
+                self.live.update(
+                    self.render(),
+                    refresh=True,
+                )
+
+                sleep_time = min(
+                    0.25,
+                    remaining,
+                )
+
+                time.sleep(
+                    sleep_time
+                )
+
+                remaining -= sleep_time
+                frame += 1
+
+        # ----------------------------------------------------
+        # Restore the real final result
+        # ----------------------------------------------------
+
+        self.overall_label = final_label
+        self.overall_style = final_style
+        self.overall_detail = final_detail
+
         self.live.update(
             self.render(),
             refresh=True,
         )
+
+        # Briefly leave the final verdict visible before
+        # printing the detailed diagnostic tables.
+        if self.animated:
+            time.sleep(0.55)
 
         self.live.stop()
         self.live = None
@@ -151,6 +270,18 @@ class ScanProgress:
         step.detail = detail
 
         self._update()
+
+        # Let each completed checkbox remain visible briefly so
+        # the scan feels sequential instead of all results
+        # appearing in one frame.
+        if (
+            self.animated
+            and state in FINAL_STATES
+            and self.live is not None
+        ):
+            time.sleep(
+                self.step_pause
+            )
 
     def checking(
         self,
@@ -226,10 +357,6 @@ class ScanProgress:
         elif normalized in {
             "ATTENTION",
             "WARNING",
-        }:
-            self.overall_style = "yellow"
-
-        elif normalized in {
             "DEGRADED",
             "HIGH",
         }:
@@ -372,12 +499,14 @@ class ScanProgress:
         completed = self.completed_count()
         total = len(self.steps)
 
-        if total:
-            ratio = completed / total
-        else:
-            ratio = 0
+        ratio = (
+            completed / total
+            if total
+            else 0
+        )
 
-        blocks = 18
+        blocks = 22
+
         filled = round(
             blocks * ratio
         )
@@ -441,7 +570,7 @@ class ScanProgress:
             ),
             subtitle=(
                 "[dim]"
-                "read-only node health scan"
+                "NVIDIA infrastructure health analysis"
                 "[/dim]"
             ),
             border_style=self.overall_style,
